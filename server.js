@@ -220,6 +220,15 @@ async function collectNews() {
   return [];
 }
 
+// ── reports/index.json 갱신 (GitHub Pages 정적 폴백용) ──────────
+function updateIndex() {
+  if (!fs.existsSync(REPORTS_DIR)) return;
+  const files = fs.readdirSync(REPORTS_DIR)
+    .filter(f => /^\d{4}-\d{2}-\d{2}_\d{2}\.md$/.test(f))
+    .sort().reverse();
+  fs.writeFileSync(path.join(REPORTS_DIR, 'index.json'), JSON.stringify(files), 'utf-8');
+}
+
 // ── MD 파일 작성 ──────────────────────────────────────────────────
 function writeReport(date, run, ts, { velog, yozmit, github, stocks, usdkrw, news }, overwriteFilename = null) {
   const velogMd = velog.length
@@ -341,6 +350,7 @@ async function handleCollect(res, overwriteFilename = null) {
 
     send(97, '파일 저장 중...');
     const filename = writeReport(date, run, ts, { velog, yozmit, github, stocks, usdkrw, news }, overwriteFilename);
+    updateIndex();
 
     send(100, overwriteFilename ? '업데이트 완료!' : '수집 완료!', { done: true, filename });
     console.log(`[완료] reports/${filename}`);
