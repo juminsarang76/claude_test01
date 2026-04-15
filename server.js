@@ -371,6 +371,16 @@ http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
+  if (req.method === 'GET' && req.url === '/api/list') {
+    if (!fs.existsSync(REPORTS_DIR)) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('[]'); return; }
+    const files = fs.readdirSync(REPORTS_DIR)
+      .filter(f => /^\d{4}-\d{2}-\d{2}_\d{2}\.md$/.test(f))
+      .sort().reverse();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(files));
+    return;
+  }
+
   if (req.method === 'POST' && req.url === '/api/collect') {
     await handleCollect(res);
     return;

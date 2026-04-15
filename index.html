@@ -148,28 +148,16 @@
     return html;
   }
 
-  // ── 파일 감지: {date}_{NN}.md 형식 ──
-  function generateCandidates() {
-    const files = [];
-    const base = new Date('2026-04-15');
-    for (let i = 0; i < 60; i++) {
-      const d = new Date(base);
-      d.setDate(base.getDate() - i);
-      const y = d.getFullYear();
-      const m = String(d.getMonth()+1).padStart(2,'0');
-      const day = String(d.getDate()).padStart(2,'0');
-      const date = `${y}-${m}-${day}`;
-      // 각 날짜별로 01~09번까지 후보
-      for (let n = 1; n <= 9; n++) {
-        files.push({ date, run: String(n).padStart(2,'0'), name: `${date}_${String(n).padStart(2,'0')}.md` });
-      }
-    }
-    return files;
-  }
-
-  async function fileExists(path) {
-    try { return (await fetch(path, { method: 'HEAD' })).ok; }
-    catch { return false; }
+  // ── 파일 목록: 서버 /api/list 에서 가져옴 ──
+  async function fetchFileList() {
+    const res = await fetch('/api/list');
+    if (!res.ok) throw new Error('목록 조회 실패');
+    const names = await res.json(); // ["2026-04-15_02.md", ...]
+    return names.map(name => ({
+      name,
+      date: name.slice(0, 10),
+      run:  name.slice(11, 13),
+    }));
   }
 
   async function loadFile(path) {
@@ -214,12 +202,13 @@
     const listEl = document.getElementById('file-list');
     listEl.innerHTML = '<p style="color:#718096;font-size:12px;padding:16px">검색 중...</p>';
 
-    const candidates = generateCandidates();
-    const checks = await Promise.all(
-      candidates.map(c => fileExists(`reports/${c.name}`).then(ok => ({ ...c, ok })))
-    );
-
-    const found = checks.filter(c => c.ok);
+    let found;
+    try {
+      found = await fetchFileList();
+    } catch {
+      listEl.innerHTML = '<p style="color:#fc8181;font-size:12px;padding:16px">목록 조회 실패</p>';
+      return;
+    }
     listEl.innerHTML = '';
 
     if (found.length === 0) {
