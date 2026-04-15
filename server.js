@@ -192,7 +192,7 @@ async function collectNews() {
 }
 
 // ── MD 파일 작성 ──────────────────────────────────────────────────
-function writeReport(date, run, ts, { velog, yozmit, github, stocks, usdkrw, news }) {
+function writeReport(date, run, ts, { velog, yozmit, github, stocks, usdkrw, news }, overwriteFilename = null) {
   const velogMd = velog.length
     ? `| # | 제목 | 작성자 | 요약 |\n|---|------|--------|------|\n`
       + velog.map(p => `| ${p.rank} | [${p.title}](${p.url}) | ${p.author} | ${p.summary||'-'} |`).join('\n')
@@ -211,7 +211,7 @@ function writeReport(date, run, ts, { velog, yozmit, github, stocks, usdkrw, new
     ? news.map((n,i) => `${i+1}. **[${n.title}](${n.url})**`).join('\n')
     : '> ⚠️ 마켓 뉴스 수집 실패';
 
-  const filename = `${date}_${run}.md`;
+  const filename = overwriteFilename || `${date}_${run}.md`;
   const content  = `# 정보 수집 보고서 — ${date} (Run ${run})
 
 ---
@@ -266,8 +266,8 @@ ${newsMd}
   return filename;
 }
 
-// ── SSE 수집 핸들러 ───────────────────────────────────────────────
-async function handleCollect(res) {
+// ── SSE 수집 핸들러 (overwriteFilename 지정 시 해당 파일 덮어쓰기) ──
+async function handleCollect(res, overwriteFilename = null) {
   res.writeHead(200, {
     'Content-Type':  'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -279,12 +279,12 @@ async function handleCollect(res) {
     res.write(`data: ${JSON.stringify({ progress, step, ...extra })}\n\n`);
   };
 
-  const date = getToday();
-  const run  = getNextRun(date);
+  const date = overwriteFilename ? overwriteFilename.slice(0, 10) : getToday();
+  const run  = overwriteFilename ? overwriteFilename.slice(11, 13) : getNextRun(date);
   const ts   = getTimestamp();
 
   try {
-    send(0,  '수집을 시작합니다...');
+    send(0,  overwriteFilename ? `${overwriteFilename} 업데이트 중...` : '수집을 시작합니다...');
 
     send(5,  'Velog 트렌드 수집 중...');
     const velog = await collectVelog();
@@ -310,10 +310,10 @@ async function handleCollect(res) {
     const news = await collectNews();
     send(95, `뉴스 수집 완료 (${news.length}건)`);
 
-    send(97, '보고서 파일 생성 중...');
-    const filename = writeReport(date, run, ts, { velog, yozmit, github, stocks, usdkrw, news });
+    send(97, '파일 저장 중...');
+    const filename = writeReport(date, run, ts, { velog, yozmit, github, stocks, usdkrw, news }, overwriteFilename);
 
-    send(100, '수집 완료!', { done: true, filename });
+    send(100, overwriteFilename ? '업데이트 완료!' : '수집 완료!', { done: true, filename });
     console.log(`[완료] reports/${filename}`);
   } catch (e) {
     console.error('수집 오류:', e);
@@ -346,9 +346,21 @@ http.createServer(async (req, res) => {
     await handleCollect(res);
     return;
   }
+
+  if (req.method === 'POST' && req.url === '/api/update') {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', async () => {
+      const { filename } = JSON.parse(body || '{}');
+      await handleCollect(res, filename || null);
+    });
+    return;
+  }
+
   serveStatic(req, res);
 
 }).listen(PORT, () => {
   console.log(`\n🚀 서버 실행: http://localhost:${PORT}`);
-  console.log(`   수집 API : POST /api/collect\n`);
+  console.log(`   수집 API : POST /api/collect`);
+  console.log(`   업데이트 API: POST /api/update\n`);
 });

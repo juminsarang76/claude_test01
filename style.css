@@ -46,6 +46,29 @@ header .subtitle { font-size: 13px; color: #718096; flex: 1; }
 #collect-btn.loading .spin { display: inline; }
 #collect-btn.loading .icon { display: none; }
 
+/* 업데이트 버튼 */
+#update-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: #1e3a5f;
+  color: #93c5fd;
+  border: 1px solid #2563eb44;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  flex-shrink: 0;
+}
+#update-btn:hover:not(:disabled) { background: #1d4ed8; color: #bfdbfe; }
+#update-btn:active:not(:disabled) { background: #1e40af; }
+#update-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+#update-btn .spin { display: none; animation: spin 0.8s linear infinite; }
+#update-btn.loading .spin { display: inline; }
+#update-btn.loading .icon { display: none; }
+
 /* 진행률 바 */
 #progress-wrap {
   max-height: 0;
