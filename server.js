@@ -176,19 +176,48 @@ async function collectExchangeRate() {
 }
 
 async function collectNews() {
-  try {
-    const res  = await httpGet('https://finance.naver.com/news/mainnews.naver', { Referer: 'https://finance.naver.com/' });
-    const html = res.body;
+  // RSS XML 파싱 헬퍼 — CDATA 포함 처리
+  function parseRSS(xml, max = 3) {
     const items = [];
-    const re = /href="(\/news\/news_read\.naver[^"]+)"[^>]*>\s*<strong[^>]*>([\s\S]*?)<\/strong>/gi;
+    const itemRe = /<item>([\s\S]*?)<\/item>/gi;
     let m;
-    while ((m = re.exec(html)) !== null && items.length < 3) {
-      const title = m[2].replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
-      if (title.length > 5)
-        items.push({ title, url: 'https://finance.naver.com' + m[1].replace(/&amp;/g,'&') });
+    while ((m = itemRe.exec(xml)) !== null && items.length < max) {
+      const block = m[1];
+      // title: CDATA 또는 plain text 모두 처리
+      const titleMatch = block.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
+      // link: CDATA wrapping 여부 무관하게 URL만 추출
+      const linkMatch  = block.match(/<link>(?:<!\[CDATA\[)?\s*(https?:\/\/[^<\]\s]+)/i)
+                      || block.match(/<guid[^>]*>(?:<!\[CDATA\[)?\s*(https?:\/\/[^<\]\s]+)/i);
+      if (!titleMatch || !linkMatch) continue;
+      const title = titleMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+      const url   = linkMatch[1].trim();
+      if (title.length > 5) items.push({ title, url });
     }
     return items;
-  } catch (e) { console.error('News:', e.message); return []; }
+  }
+
+  // 1차: 한국경제 경제 RSS (금융/증시 특화)
+  try {
+    const res   = await httpGet('https://www.hankyung.com/feed/economy');
+    const items = parseRSS(res.body);
+    if (items.length > 0) { console.log('뉴스: 한국경제 경제 RSS'); return items; }
+  } catch (e) { console.error('한국경제 경제 RSS:', e.message); }
+
+  // 2차: 한국경제 금융 RSS
+  try {
+    const res   = await httpGet('https://www.hankyung.com/feed/finance');
+    const items = parseRSS(res.body);
+    if (items.length > 0) { console.log('뉴스: 한국경제 금융 RSS'); return items; }
+  } catch (e) { console.error('한국경제 금융 RSS:', e.message); }
+
+  // 3차: 매일경제 헤드라인 RSS
+  try {
+    const res   = await httpGet('https://www.mk.co.kr/rss/30000001/');
+    const items = parseRSS(res.body);
+    if (items.length > 0) { console.log('뉴스: 매일경제 헤드라인 RSS'); return items; }
+  } catch (e) { console.error('매일경제 헤드라인 RSS:', e.message); }
+
+  return [];
 }
 
 // ── MD 파일 작성 ──────────────────────────────────────────────────
